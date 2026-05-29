@@ -1,0 +1,168 @@
+name: ecommerce-microservices
+
+# ──────────────────────────────────────────────────────────────────────────
+#  One command to run the whole platform:  docker compose up --build
+#
+#  Infrastructure:  mongodb (one container, one DB per service), rabbitmq
+#  Services:        gateway(3000) auth(3001) catalog(3002) orders(3003)
+#                   payments(3004) notifications(3005)
+# ──────────────────────────────────────────────────────────────────────────
+
+x-service-base: &service-base
+  restart: unless-stopped
+  env_file:
+    - .env
+  depends_on:
+    mongodb:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+  networks:
+    - ecommerce
+
+services:
+  # ── Infrastructure ───────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: ecommerce-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ecommerce
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ecommerce-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI  ->  http://localhost:15672 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ecommerce
+
+  # ── Application services ─────────────────────────────────────────────────
+  auth:
+    <<: *service-base
+    container_name: ecommerce-auth
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://mongodb:27017/auth_db
+    ports:
+      - "3001:3001"
+
+  product-catalog:
+    <<: *service-base
+    container_name: ecommerce-catalog
+    build:
+      context: .
+      dockerfile: services/product-catalog/Dockerfile
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://mongodb:27017/catalog_db
+    ports:
+      - "3002:3002"
+
+  orders:
+    <<: *service-base
+    container_name: ecommerce-orders
+    build:
+      context: .
+      dockerfile: services/orders/Dockerfile
+    environment:
+      PORT: 3003
+      MONGO_URI: mongodb://mongodb:27017/order_db
+    ports:
+      - "3003:3003"
+
+  payments:
+    <<: *service-base
+    container_name: ecommerce-payments
+    build:
+      context: .
+      dockerfile: services/payments/Dockerfile
+    environment:
+      PORT: 3004
+      MONGO_URI: mongodb://mongodb:27017/payments_db
+    ports:
+      - "3004:3004"
+
+  notifications:
+    <<: *service-base
+    container_name: ecommerce-notifications
+    build:
+      context: .
+      dockerfile: services/notifications/Dockerfile
+    environment:
+      PORT: 3005
+      MONGO_URI: mongodb://mongodb:27017/notifications_db
+    ports:
+      - "3005:3005"
+
+  gateway:
+    <<: *service-base
+    container_name: ecommerce-gateway
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    environment:
+      PORT: 3000
+    ports:
+      # Host 8080 → container 3000 (host 3000 is used by another local project).
+      - "8080:3000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      product-catalog:
+        condition: service_started
+      orders:
+        condition: service_started
+      payments:
+        condition: service_started
+      notifications:
+        condition: service_started
+
+  # ── Web storefront (React SPA served by nginx) ───────────────────────────
+  frontend:
+    container_name: ecommerce-frontend
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the build; the browser calls the gateway on the host.
+        VITE_API_URL: http://localhost:8080
+    ports:
+      - "8081:80"
+    depends_on:
+      - gateway
+    networks:
+      - ecommerce
+
+networks:
+  ecommerce:
+    driver: bridge
+
+volumes:
+  mongo-data:
