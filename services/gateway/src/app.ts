@@ -42,6 +42,11 @@ function proxy(target: string, prefix: string): RequestHandler {
 export function createApp(): Express {
   const app = express();
 
+  // Behind a reverse proxy (Render, Nginx, etc.) the real client IP is in
+  // X-Forwarded-For. Trust the first proxy hop so express-rate-limit can
+  // identify clients correctly instead of throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+  app.set('trust proxy', 1);
+
   app.use(helmet());
   app.use(cors());
 
