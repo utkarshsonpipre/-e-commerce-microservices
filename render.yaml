@@ -1,0 +1,151 @@
+# Render Blueprint — deploys the whole platform.
+#  In Render: New +  →  Blueprint  →  pick this repo.
+#
+#  Services talk to each other over Render's private network using their
+#  service name + port (e.g. http://ecommerce-auth:3001). The browser talks to
+#  the gateway's PUBLIC url.
+#
+#  External managed dependencies (Render has no managed Mongo/RabbitMQ):
+#    - MongoDB Atlas (free)  -> paste each service's MONGO_URI when prompted
+#    - CloudAMQP   (free)    -> paste RABBITMQ_URL once (shared group)
+
+envVarGroups:
+  - name: ecommerce-shared
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true # Render generates one shared secret for all services
+      - key: INTERNAL_API_KEY
+        generateValue: true
+      - key: RABBITMQ_EXCHANGE
+        value: ecommerce
+      - key: RABBITMQ_URL
+        sync: false # paste your CloudAMQP amqps://... url
+
+services:
+  # ── auth ───────────────────────────────────────────────────────────────
+  - type: web
+    name: ecommerce-auth
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/auth/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: ecommerce-shared
+      - key: PORT
+        value: 3001
+      - key: MONGO_URI
+        sync: false # mongodb+srv://...mongodb.net/auth_db?retryWrites=true&w=majority
+
+  # ── product-catalog ─────────────────────────────────────────────────────
+  - type: web
+    name: ecommerce-catalog
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/product-catalog/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: ecommerce-shared
+      - key: PORT
+        value: 3002
+      - key: MONGO_URI
+        sync: false # .../catalog_db?...
+
+  # ── orders ───────────────────────────────────────────────────────────────
+  - type: web
+    name: ecommerce-orders
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/orders/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: ecommerce-shared
+      - key: PORT
+        value: 3003
+      - key: MONGO_URI
+        sync: false # .../order_db?...
+      - key: CATALOG_SERVICE_URL
+        value: http://ecommerce-catalog:3002
+
+  # ── payments (Stripe optional → stub mode if unset) ───────────────────────
+  - type: web
+    name: ecommerce-payments
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/payments/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: ecommerce-shared
+      - key: PORT
+        value: 3004
+      - key: MONGO_URI
+        sync: false # .../payments_db?...
+      # Optional — leave unset to run the stub gateway:
+      # - key: STRIPE_SECRET_KEY
+      #   sync: false
+      # - key: STRIPE_WEBHOOK_SECRET
+      #   sync: false
+
+  # ── notifications ─────────────────────────────────────────────────────────
+  - type: web
+    name: ecommerce-notifications
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/notifications/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: ecommerce-shared
+      - key: PORT
+        value: 3005
+      - key: MONGO_URI
+        sync: false # .../notifications_db?...
+      - key: MAIL_TRANSPORT
+        value: log
+
+  # ── API gateway (public entry point) ─────────────────────────────────────
+  - type: web
+    name: ecommerce-gateway
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/gateway/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: ecommerce-shared
+      - key: PORT
+        value: 3000
+      - key: AUTH_SERVICE_URL
+        value: http://ecommerce-auth:3001
+      - key: CATALOG_SERVICE_URL
+        value: http://ecommerce-catalog:3002
+      - key: ORDERS_SERVICE_URL
+        value: http://ecommerce-orders:3003
+      - key: PAYMENTS_SERVICE_URL
+        value: http://ecommerce-payments:3004
+      - key: NOTIFICATIONS_SERVICE_URL
+        value: http://ecommerce-notifications:3005
+
+  # ── frontend (React SPA, static site) ─────────────────────────────────────
+  - type: web
+    name: ecommerce-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false # https://ecommerce-gateway-XXXX.onrender.com  (the gateway's public url)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
