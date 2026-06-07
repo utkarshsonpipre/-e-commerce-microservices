@@ -15,6 +15,8 @@ export interface Product {
   currency: string;
   category: string;
   stock: number;
+  sku: string;
+  image?: string;
 }
 export interface CartItem {
   productId: string;
@@ -77,14 +79,18 @@ export const api = {
     http<{ user: User; accessToken: string }>('POST', '/api/auth/register', { email, password, name }),
   login: (email: string, password: string) =>
     http<{ user: User; accessToken: string }>('POST', '/api/auth/login', { email, password }),
+  me: () => http<{ user: User }>('GET', '/api/auth/me', undefined, true),
 
   // ── catalog ──
-  getProducts: () => http<{ items: Product[] }>('GET', '/api/products'),
+  getProducts: () => http<{ items: Product[] }>('GET', '/api/products?limit=100'),
+  getProduct: (id: string) => http<{ product: Product }>('GET', `/api/products/${id}`),
 
   // ── cart ──
   getCart: () => http<{ cart: { items: CartItem[] } }>('GET', '/api/cart', undefined, true),
   addToCart: (productId: string, quantity: number) =>
     http<{ cart: { items: CartItem[] } }>('POST', '/api/cart/items', { productId, quantity }, true),
+  removeFromCart: (productId: string) =>
+    http<{ cart: { items: CartItem[] } }>('DELETE', `/api/cart/items/${productId}`, undefined, true),
   clearCart: () => http<void>('DELETE', '/api/cart', undefined, true),
 
   // ── orders ──

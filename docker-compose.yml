@@ -125,8 +125,8 @@ services:
     environment:
       PORT: 3000
     ports:
-      # Host 8080 → container 3000 (host 3000 is used by another local project).
-      - "8080:3000"
+      # Host 8090 → container 3000 (hosts 3000 and 8080 are used by other local projects).
+      - "8090:3000"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -152,7 +152,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Baked into the build; the browser calls the gateway on the host.
-        VITE_API_URL: http://localhost:8080
+        VITE_API_URL: http://localhost:8090
     ports:
       - "8081:80"
     depends_on:

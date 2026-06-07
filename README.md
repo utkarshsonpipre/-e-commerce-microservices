@@ -67,7 +67,7 @@ cp .env.example .env        # then drop in your Stripe test keys
 docker compose up --build
 ```
 - **Storefront (web UI): http://localhost:8081**  ← open this to click through the whole flow
-- Gateway (API): http://localhost:8080  (host 8080 → gateway container's port 3000)
+- Gateway (API): http://localhost:8090  (host 8090 → gateway container's port 3000)
 - RabbitMQ management UI: http://localhost:15672 (guest / guest)
 
 The storefront is a React + Vite SPA (in `frontend/`) that drives the full journey:
