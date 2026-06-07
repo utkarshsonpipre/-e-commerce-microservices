@@ -2,6 +2,14 @@
 
 A production-style e-commerce backend built as independent microservices, demonstrating the architectural patterns most commonly probed in interviews: **synchronous REST + asynchronous messaging**, **database-per-service**, **JWT auth across services**, a **Stripe payment integration with webhook verification**, and a **saga-style checkout flow**.
 
+## 🚀 Live Demo
+
+**👉 https://ecommerce-frontend-h242.onrender.com**
+
+Register an account → browse products → add to cart → checkout → simulate the payment and watch the order flow through the services in real time.
+
+> ⏳ **Note:** hosted on Render's free tier, so the services **sleep when idle** — the **first load may take ~30–60 seconds** while they wake up. Give it a moment, then refresh. (MongoDB on Atlas, RabbitMQ on CloudAMQP, all services + the React storefront on Render via the [`render.yaml`](./render.yaml) Blueprint.)
+
 ## Architecture
 
 ```
